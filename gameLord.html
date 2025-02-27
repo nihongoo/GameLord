@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fruit Box Game</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #f0f0f0;
+        }
+
+        #game {
+            text-align: center;
+        }
+
+        #score {
+            font-size: 24px;
+            font-weight: bold;
+            color: black;
+            line-height: 150px;
+            border-radius: 50%;
+            position: absolute;
+            top: 10%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
+
+        #timer {
+            font-size: 18px;
+            margin-bottom: 10px;
+        }
+
+        #grid {
+            border-collapse: collapse;
+            background-color: #d0f0c0;
+            border: 2px solid #006400;
+            position: relative;
+            user-select: none; /* Ngăn chọn văn bản */
+            -webkit-user-select: none; /* Safari */
+            -moz-user-select: none; /* Firefox */
+            -ms-user-select: none; /* IE/Edge */
+        }
+
+        #grid td {
+            border: 1px solid #ddd;
+            width: 40px;
+            height: 40px;
+            text-align: center;
+            font-weight: bold;
+            color: red;
+            font-size: 18px;
+            user-select: none; /* Ngăn chọn văn bản */
+            -webkit-user-select: none; /* Safari */
+            -moz-user-select: none; /* Firefox */
+            -ms-user-select: none; /* IE/Edge */
+        }
+
+        #grid td.selected {
+            background-color: #90ee90;
+        }
+
+        #grid.light td {
+            background-color: #e0e0e0;
+            color: #888;
+        }
+
+        #grid.disabled {
+            pointer-events: none;
+        }
+
+        #controls {
+            margin-top: 20px;
+        }
+
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            background-color: #4caf50;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background-color: #45a049;
+        }
+        #refresh-cells {
+    background-color: #3f51b5;
+}
+
+#refresh-cells:hover {
+    background-color: #303f9f;
+}
+
+        label {
+            margin-right: 20px;
+            font-size: 16px;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="game">
+        <div id="score">Score: 0</div>
+        <div id="timer">Time: đòi có time XD</div>
+        <table id="grid"></table>
+        <div id="controls">
+            <label><input type="checkbox" id="light-colors"> Light Colors</label>
+            <button id="new-game">New Game</button>
+            <button id="refresh-cells">Đổi ô chưa giải</button>
+        </div>
+    </div>
+    <script>
+        const ROWS = 10;
+        const COLS = 17;
+        let grid = [];
+        let score = 0;
+        let isSelecting = false;
+        let startRow, startCol, endRow, endCol;
+        let timerId;
+
+        const gridTable = document.getElementById('grid');
+        const scoreDiv = document.getElementById('score');
+        const timerDiv = document.getElementById('timer');
+        const lightColorsCheckbox = document.getElementById('light-colors');
+        const newGameButton = document.getElementById('new-game');
+        const refreshCellsButton = document.getElementById('refresh-cells');
+
+        function initGame() {
+            generateGrid();
+            renderGrid();
+            score = 0;
+            timeLeft = 120;
+            updateScore();
+            updateTimer();
+            clearInterval(timerId);
+            timerId = setInterval(updateTimer, 1000);
+            gridTable.classList.remove('disabled');
+        }
+
+        function generateGrid() {
+            grid = Array.from({ length: ROWS }, () => Array.from({ length: COLS }, () => Math.floor(Math.random() * 9) + 1));
+            let totalSum = grid.flat().reduce((a, b) => a + b, 0);
+            let remainder = totalSum % 10;
+            if (remainder !== 0) {
+                for (let i = 0; i < ROWS; i++) {
+                    for (let j = 0; j < COLS; j++) {
+                        let val = grid[i][j];
+                        if (val - remainder >= 1) {
+                            grid[i][j] -= remainder;
+                            return;
+                        } else if (val + (10 - remainder) <= 9) {
+                            grid[i][j] += (10 - remainder);
+                            return;
+                        }
+                    }
+                }
+            }
+        }
+
+        function renderGrid() {
+            gridTable.innerHTML = '';
+            for (let i = 0; i < ROWS; i++) {
+                let row = document.createElement('tr');
+                for (let j = 0; j < COLS; j++) {
+                    let cell = document.createElement('td');
+                    cell.dataset.row = i;
+                    cell.dataset.col = j;
+                    cell.textContent = grid[i][j] > 0 ? grid[i][j] : '';
+                    row.appendChild(cell);
+                }
+                gridTable.appendChild(row);
+            }
+        }
+
+        function updateScore() {
+            scoreDiv.textContent = `Score: ${score}`;
+        }
+
+        gridTable.addEventListener('mousedown', (e) => {
+            if (e.target.tagName === 'TD' && !gridTable.classList.contains('disabled')) {
+                isSelecting = true;
+                startRow = parseInt(e.target.dataset.row);
+                startCol = parseInt(e.target.dataset.col);
+                endRow = startRow;
+                endCol = startCol;
+                highlightSelection();
+            }
+        });
+
+        gridTable.addEventListener('mousemove', (e) => {
+            if (isSelecting && e.target.tagName === 'TD') {
+                endRow = parseInt(e.target.dataset.row);
+                endCol = parseInt(e.target.dataset.col);
+                highlightSelection();
+            }
+        });
+
+        gridTable.addEventListener('mouseup', () => {
+            if (isSelecting) {
+                isSelecting = false;
+                checkSelection();
+                clearSelection();
+            }
+        });
+
+        function highlightSelection() {
+            // Xác định vùng chọn
+            let minRow = Math.min(startRow, endRow);
+            let maxRow = Math.max(startRow, endRow);
+            let minCol = Math.min(startCol, endCol);
+            let maxCol = Math.max(startCol, endCol);
+
+            // Lặp qua tất cả các ô trong lưới
+            for (let i = 0; i < ROWS; i++) {
+                for (let j = 0; j < COLS; j++) {
+                    let cell = gridTable.rows[i].cells[j];
+                    // Chỉ tô đen các ô trong vùng chọn
+                    if (i >= minRow && i <= maxRow && j >= minCol && j <= maxCol) {
+                        cell.classList.add('selected');
+                    } else {
+                        // Xóa tô đen khỏi các ô ngoài vùng chọn
+                        cell.classList.remove('selected');
+                    }
+                }
+            }
+        }
+
+        function clearSelection() {
+            for (let i = 0; i < ROWS; i++) {
+                for (let j = 0; j < COLS; j++) {
+                    gridTable.rows[i].cells[j].classList.remove('selected');
+                }
+            }
+        }
+        function refreshUnsolvedCells() {
+    let hasRemainingCells = false;
+    
+    // Tạo một mảng tạm để lưu các ô có giá trị mới
+    let newValues = Array.from({ length: ROWS }, () => 
+        Array.from({ length: COLS }, () => Math.floor(Math.random() * 9) + 1)
+    );
+    
+    // Chỉ cập nhật những ô còn giá trị > 0
+    for (let i = 0; i < ROWS; i++) {
+        for (let j = 0; j < COLS; j++) {
+            if (grid[i][j] > 0) {
+                grid[i][j] = newValues[i][j];
+                hasRemainingCells = true;
+            }
+        }
+    }
+    
+    // Nếu có ô còn lại, cập nhật lại giao diện
+    if (hasRemainingCells) {
+        renderGrid();
+    } else {
+        alert("Không còn ô nào để đổi. Tất cả đã được giải!");
+    }
+}
+
+        function checkSelection() {
+            let minRow = Math.min(startRow, endRow);
+            let maxRow = Math.max(startRow, endRow);
+            let minCol = Math.min(startCol, endCol);
+            let maxCol = Math.max(startCol, endCol);
+
+            let sum = 0;
+            for (let i = minRow; i <= maxRow; i++) {
+                for (let j = minCol; j <= maxCol; j++) {
+                    sum += grid[i][j]; // grid là mảng chứa giá trị của các ô
+                }
+            }
+
+            if (sum === 10) {
+                // Xử lý khi tổng bằng 10, ví dụ: xóa các ô và cộng điểm
+                removeCells(minRow, minCol, maxRow, maxCol);
+                score += (maxRow - minRow + 1) * (maxCol - minCol + 1);
+                updateScore();
+            }
+        }
+
+        function removeCells(minRow, minCol, maxRow, maxCol) {
+            for (let i = minRow; i <= maxRow; i++) {
+                for (let j = minCol; j <= maxCol; j++) {
+                    if (grid[i][j] > 0) {
+                        grid[i][j] = 0;
+                        gridTable.rows[i].cells[j].textContent = '';
+                    }
+                }
+            }
+        }
+
+        lightColorsCheckbox.addEventListener('change', () => {
+            if (lightColorsCheckbox.checked) {
+                gridTable.classList.add('light');
+            } else {
+                gridTable.classList.remove('light');
+            }
+        });
+
+        newGameButton.addEventListener('click', initGame);
+        refreshCellsButton.addEventListener('click', refreshUnsolvedCells);
+        initGame();
+    </script>
+</body>
+
+</html>
