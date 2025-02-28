@@ -57,7 +57,7 @@ function renderGrid() {
 }
 
 function updateScore() {
-    scoreDiv.textContent = `Score: ${score}`;
+    scoreDiv.textContent = `Điểm: ${score}`;
 }
 
 gridTable.addEventListener('mousedown', (e) => {
